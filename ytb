@@ -1,0 +1,126 @@
+#!/bin/bash
+
+ICON_SEEN="⬛️"
+ICON_NOT_SEEN="🆕"
+
+__usage="
+Usage: $(basename $0) [list]
+       $(basename $0) add <handle>
+       $(basename $0) read <handle> (rss|id|name|rss_url|latest_publish|seen_latest|url)
+"
+
+display_usage() {
+  echo "$__usage" >&2
+}
+
+cache_handle() {
+  HANDLE=$1
+  HANDLE_CACHE_DIR=${CACHE_DIR}/$HANDLE
+  mkdir -p $HANDLE_CACHE_DIR
+  DOC=$(curl -s "https://www.youtube.com/${HANDLE}?cbrd=1&ucbcb=1&themeRefresh=1&theme=dark" \
+    -H 'authority: www.youtube.com' \
+    -H 'accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8' \
+    -H 'accept-language: en-US,en;q=0.6' \
+    -H 'cache-control: no-cache' \
+    -H 'dnt: 1' \
+    -H 'pragma: no-cache')
+
+  echo "$DOC" | xmllint --html \
+    --nowarning \
+    --xpath "string(//meta[@itemprop='identifier']/@content)" \
+    - 2>/dev/null > $HANDLE_CACHE_DIR/id
+
+  echo "$DOC" | xmllint --html \
+    --nowarning \
+    --xpath "string(//meta[@itemprop='name']/@content)" \
+    - 2>/dev/null > $HANDLE_CACHE_DIR/name
+
+  echo "$DOC" | xmllint --html \
+    --nowarning \
+    --xpath "string(//link[@title='RSS']/@href)" \
+    - 2>/dev/null > $HANDLE_CACHE_DIR/rss_url
+}
+fetch_rss_entry() {
+  HANDLE=$1
+  HANDLE_CACHE_DIR=${CACHE_DIR}/$HANDLE
+  URL=$(cat $HANDLE_CACHE_DIR/rss_url)
+  curl -s $URL | xpath -q -e "(/feed/entry)[1]" 
+}
+read_rss_entry() {
+  HANDLE_CACHE_DIR=${CACHE_DIR}/$HANDLE
+  filename=$HANDLE_CACHE_DIR/rss_entry
+  if [[ ! -f $filename ]]; then
+    fetch_rss_entry $HANDLE > $filename
+  fi
+  stale_entry=$(find "$filename" -not -newermt "2 hours ago" -print)
+  if [[ "$stale_entry" != "" ]]; then
+    fetch_rss_entry $HANDLE > $filename
+  fi
+  cat $filename
+}
+
+CONFIG_DIR=${XDG_CONFIG_HOME:-$HOME/.config}/ytb
+CACHE_DIR=${XDG_CACHE_HOME:-$HOME/.cache}/ytb
+SELF=$(basename $0)
+
+if [[ ! -d $CONFIG_DIR ]]; then
+  echo "No config found; Add some channels to config"
+  display_usage
+  exit 0
+fi
+
+if [[ $# -eq 0 ]]; then
+  : | fzf --delimiter "\t" \
+    --bind "start:reload:$SELF list" \
+    --bind "ctrl-r:reload:$SELF list" \
+    --bind "enter:execute-silent($SELF open {3})" \
+    --header '╱ CTRL-R (reload) ╱' \
+    --preview "$SELF read {3} rss" \
+    --cycle
+elif [[ $# -eq 1 && $1 == "list" ]]; then
+  awk -v OFS='\t' "{
+    readSeen = \"$SELF read \" \$0 \" seen_latest\"; readSeen | getline seenValue; close(readSeen)
+    readDate = \"$SELF read \" \$0 \" latest_publish\"; readDate | getline dateValue; close(readDate)
+    print seenValue, dateValue, \$0
+  }" $CONFIG_DIR/channels
+elif [[ $# -eq 2 && $1 == "open" ]]; then
+  HANDLE=$2
+  HANDLE_CACHE_DIR=${CACHE_DIR}/$HANDLE
+  URL=$($SELF read $HANDLE url)
+  touch $HANDLE_CACHE_DIR/last_access
+  open -n -a 'Brave Browser Nightly' --args --app=$URL
+elif [[ $# -eq 2 && $1 == "add" ]]; then
+  HANDLE=$2
+  mkdit -p $CONFIG_DIR
+  echo "$HANDLE" >> $CONFIG_DIR/channels
+elif [[ $# -eq 3 && $1 == "read" ]]; then
+  HANDLE=$2
+  HANDLE_CACHE_DIR=${CACHE_DIR}/$HANDLE
+  if [[ ! -d $HANDLE_CACHE_DIR ]]; then
+    cache_handle $HANDLE
+  fi
+  if [[ $3 == "id" ]]; then
+    cat $HANDLE_CACHE_DIR/id
+  elif [[ $3 == "name" ]]; then
+    cat $HANDLE_CACHE_DIR/name
+  elif [[ $3 == "rss_url" ]]; then
+    cat $HANDLE_CACHE_DIR/rss_url
+  elif [[ $3 == "latest_publish" ]]; then
+    date -jf "%Y-%m-%dT%H:%M:%S+00:00" $(read_rss_entry $HANDLE | xpath -q -e "//published/text()") +"%Y-%m-%d %H:%M"
+  elif [[ $3 == "seen_latest" ]]; then
+    if [[ -f $HANDLE_CACHE_DIR/last_access && "$($SELF read $HANDLE latest_publish)" < "$(date -r $HANDLE_CACHE_DIR/last_access +'%Y-%m-%d %H:%M')" ]]; then
+      echo $ICON_SEEN
+    else
+      echo $ICON_NOT_SEEN
+    fi
+  elif [[ $3 == "rss" ]]; then
+    read_rss_entry $HANDLE
+  elif [[ $3 == "url" ]]; then
+    echo "https://www.youtube.com/${HANDLE}/videos"
+  else
+    display_usage
+  fi
+else
+  display_usage
+fi
+

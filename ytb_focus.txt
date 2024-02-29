@@ -1,0 +1,15 @@
+www.youtube.com###secondary
+www.youtube.com##.ytd-comments.style-scope
+www.youtube.com###end
+www.youtube.com##.ytd-rich-section-renderer.style-scope
+www.youtube.com###guide-inner-content
+www.youtube.com##ytd-watch-next-secondary-results-renderer.ytd-watch-flexy.style-scope > .ytd-watch-next-secondary-results-renderer.style-scope
+www.youtube.com##ytd-mini-guide-renderer.ytd-app.style-scope
+www.youtube.com###masthead > .ytd-masthead.style-scope
+www.youtube.com###top-row
+www.youtube.com###tabs-container > .ytd-c4-tabbed-header-renderer.style-scope
+www.youtube.com###channel-container > .ytd-c4-tabbed-header-renderer.style-scope
+www.youtube.com###chips-wrapper > .ytd-feed-filter-chip-bar-renderer.style-scope
+www.youtube.com###header
+www.youtube.com###page-manager:style(margin-top: 0px !important)
+
