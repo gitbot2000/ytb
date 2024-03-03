@@ -3,6 +3,18 @@
 ICON_SEEN="⬛️"
 ICON_NOT_SEEN="🆕"
 
+CONFIG_DIR=${XDG_CONFIG_HOME:-$HOME/.config}/ytb
+CACHE_DIR=${XDG_CACHE_HOME:-$HOME/.cache}/ytb
+SELF=$(basename $0)
+
+open_browser() {
+  if ! BROWSER_LOC="$(type -p "ytb-browser")" || [[ -z $BROWSER_LOC ]]; then
+    ytb-browser $1
+  else
+    open -n -a 'Brave Browser Nightly' --args --app=$1
+  fi
+}
+
 __usage="
 Usage: $(basename $0) [list]
        $(basename $0) add <handle>
@@ -71,10 +83,6 @@ check_directory() {
 
 }
 
-CONFIG_DIR=${XDG_CONFIG_HOME:-$HOME/.config}/ytb
-CACHE_DIR=${XDG_CACHE_HOME:-$HOME/.cache}/ytb
-SELF=$(basename $0)
-
 if [[ $# -eq 0 ]]; then
   check_directory $CONFIG_DIR
   : | fzf --delimiter "\t" \
@@ -97,7 +105,7 @@ elif [[ $# -eq 2 && $1 == "open" ]]; then
   HANDLE_CACHE_DIR=${CACHE_DIR}/$HANDLE
   URL=$($SELF read $HANDLE url)
   touch $HANDLE_CACHE_DIR/last_access
-  open -n -a 'Brave Browser Nightly' --args --app=$URL
+  open_browser $URL
 elif [[ $# -eq 2 && $1 == "add" ]]; then
   HANDLE=$2
   mkdit -p $CONFIG_DIR
