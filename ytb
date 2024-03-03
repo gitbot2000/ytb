@@ -8,11 +8,9 @@ Usage: $(basename $0) [list]
        $(basename $0) add <handle>
        $(basename $0) read <handle> (rss|id|name|rss_url|latest_publish|seen_latest|url)
 "
-
 display_usage() {
   echo "$__usage" >&2
 }
-
 cache_handle() {
   HANDLE=$1
   HANDLE_CACHE_DIR=${CACHE_DIR}/$HANDLE
@@ -58,18 +56,27 @@ read_rss_entry() {
   fi
   cat $filename
 }
+check_directory() {
+  local path="$1"
+  if [ ! -e "$path" ]; then
+    echo "No config found; Add some channels to config"
+    display_usage
+    exit 1
+  fi
+  if [ ! -d "$path" ]; then
+    echo "Error: Path is not a directory: $path"
+    display_usage
+    exit 69
+  fi
+
+}
 
 CONFIG_DIR=${XDG_CONFIG_HOME:-$HOME/.config}/ytb
 CACHE_DIR=${XDG_CACHE_HOME:-$HOME/.cache}/ytb
 SELF=$(basename $0)
 
-if [[ ! -d $CONFIG_DIR ]]; then
-  echo "No config found; Add some channels to config"
-  display_usage
-  exit 0
-fi
-
 if [[ $# -eq 0 ]]; then
+  check_directory $CONFIG_DIR
   : | fzf --delimiter "\t" \
     --bind "start:reload:$SELF list" \
     --bind "ctrl-r:reload:$SELF list" \
@@ -78,12 +85,14 @@ if [[ $# -eq 0 ]]; then
     --preview "$SELF read {3} rss" \
     --cycle
 elif [[ $# -eq 1 && $1 == "list" ]]; then
+  check_directory $CONFIG_DIR
   awk -v OFS='\t' "{
     readSeen = \"$SELF read \" \$0 \" seen_latest\"; readSeen | getline seenValue; close(readSeen)
     readDate = \"$SELF read \" \$0 \" latest_publish\"; readDate | getline dateValue; close(readDate)
     print seenValue, dateValue, \$0
   }" $CONFIG_DIR/channels
 elif [[ $# -eq 2 && $1 == "open" ]]; then
+  check_directory $CONFIG_DIR
   HANDLE=$2
   HANDLE_CACHE_DIR=${CACHE_DIR}/$HANDLE
   URL=$($SELF read $HANDLE url)
@@ -94,6 +103,7 @@ elif [[ $# -eq 2 && $1 == "add" ]]; then
   mkdit -p $CONFIG_DIR
   echo "$HANDLE" >> $CONFIG_DIR/channels
 elif [[ $# -eq 3 && $1 == "read" ]]; then
+  check_directory $CONFIG_DIR
   HANDLE=$2
   HANDLE_CACHE_DIR=${CACHE_DIR}/$HANDLE
   if [[ ! -d $HANDLE_CACHE_DIR ]]; then
